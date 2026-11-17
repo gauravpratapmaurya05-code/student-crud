@@ -1,0 +1,124 @@
+import { useEffect, useState } from "react";
+import { getStudents, addStudent, updateStudent, deleteStudent } from "./api";
+
+const emptyForm = { name: "", age: "", roll_no: "" };
+
+export default function App() {
+  const [students, setStudents] = useState([]);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [error, setError] = useState("");
+
+  const load = async () => {
+    try {
+      setStudents(await getStudents());
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    try {
+      if (editingId) await updateStudent(editingId, form);
+      else await addStudent(form);
+      setForm(emptyForm);
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleEdit = (s) => {
+    setEditingId(s.id);
+    setForm({ name: s.name, age: s.age, roll_no: s.roll_no });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleCancel = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setError("");
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this student?")) return;
+    try {
+      await deleteStudent(id);
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <main className="page">
+      <h1>Student records</h1>
+
+      <form className="form" onSubmit={handleSubmit}>
+        <label>
+          Name
+          <input name="name" value={form.name} onChange={handleChange} placeholder="Aarav Sharma" />
+        </label>
+        <label>
+          Age
+          <input name="age" type="number" min="1" value={form.age} onChange={handleChange} placeholder="18" />
+        </label>
+        <label>
+          Roll no.
+          <input name="roll_no" value={form.roll_no} onChange={handleChange} placeholder="CS-101" />
+        </label>
+        <div className="actions">
+          <button type="submit" className="primary">
+            {editingId ? "Save changes" : "Add student"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={handleCancel}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+
+      {error && <p className="error" role="alert">{error}</p>}
+
+      {students.length === 0 ? (
+        <p className="empty">No students yet. Add the first one above.</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Roll no.</th>
+                <th>Name</th>
+                <th>Age</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id}>
+                  <td>{s.roll_no}</td>
+                  <td>{s.name}</td>
+                  <td>{s.age}</td>
+                  <td className="row-actions">
+                    <button onClick={() => handleEdit(s)}>Edit</button>
+                    <button className="danger" onClick={() => handleDelete(s.id)}>Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </main>
+  );
+}
