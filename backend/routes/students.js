@@ -1,5 +1,5 @@
 const express = require("express");
-const db = require("../../database/db");
+const { pool } = require("../db");
 
 const router = express.Router();
 
@@ -10,59 +10,75 @@ function validate({ name, age, roll_no }) {
   return null;
 }
 
+function handleError(e, res, fallback) {
+  if (e.code === "ER_DUP_ENTRY") return res.status(409).json({ error: "That roll no. already exists" });
+  console.error(e);
+  res.status(500).json({ error: fallback });
+}
+
 // READ all
-router.get("/", (req, res) => {
-  const rows = db.prepare("SELECT * FROM students ORDER BY id DESC").all();
-  res.json(rows);
+router.get("/", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM students ORDER BY id DESC");
+    res.json(rows);
+  } catch (e) {
+    handleError(e, res, "Could not load students");
+  }
 });
 
 // READ one
-router.get("/:id", (req, res) => {
-  const row = db.prepare("SELECT * FROM students WHERE id = ?").get(req.params.id);
-  if (!row) return res.status(404).json({ error: "Student not found" });
-  res.json(row);
+router.get("/:id", async (req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM students WHERE id = ?", [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: "Student not found" });
+    res.json(rows[0]);
+  } catch (e) {
+    handleError(e, res, "Could not load student");
+  }
 });
 
 // CREATE
-router.post("/", (req, res) => {
+router.post("/", async (req, res) => {
   const error = validate(req.body);
   if (error) return res.status(400).json({ error });
   const { name, age, roll_no } = req.body;
   try {
-    const info = db
-      .prepare("INSERT INTO students (name, age, roll_no) VALUES (?, ?, ?)")
-      .run(name.trim(), Number(age), String(roll_no).trim());
-    res.status(201).json({ id: Number(info.lastInsertRowid), name: name.trim(), age: Number(age), roll_no: String(roll_no).trim() });
+    const [result] = await pool.query(
+      "INSERT INTO students (name, age, roll_no) VALUES (?, ?, ?)",
+      [name.trim(), Number(age), String(roll_no).trim()]
+    );
+    res.status(201).json({ id: result.insertId, name: name.trim(), age: Number(age), roll_no: String(roll_no).trim() });
   } catch (e) {
-    if (String(e.message).includes("UNIQUE"))
-      return res.status(409).json({ error: "That roll no. already exists" });
-    res.status(500).json({ error: "Could not save student" });
+    handleError(e, res, "Could not save student");
   }
 });
 
 // UPDATE
-router.put("/:id", (req, res) => {
+router.put("/:id", async (req, res) => {
   const error = validate(req.body);
   if (error) return res.status(400).json({ error });
   const { name, age, roll_no } = req.body;
   try {
-    const info = db
-      .prepare("UPDATE students SET name = ?, age = ?, roll_no = ? WHERE id = ?")
-      .run(name.trim(), Number(age), String(roll_no).trim(), req.params.id);
-    if (info.changes === 0) return res.status(404).json({ error: "Student not found" });
+    const [result] = await pool.query(
+      "UPDATE students SET name = ?, age = ?, roll_no = ? WHERE id = ?",
+      [name.trim(), Number(age), String(roll_no).trim(), req.params.id]
+    );
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Student not found" });
     res.json({ id: Number(req.params.id), name: name.trim(), age: Number(age), roll_no: String(roll_no).trim() });
   } catch (e) {
-    if (e.code === "SQLITE_CONSTRAINT_UNIQUE")
-      return res.status(409).json({ error: "That roll no. already exists" });
-    res.status(500).json({ error: "Could not update student" });
+    handleError(e, res, "Could not update student");
   }
 });
 
 // DELETE
-router.delete("/:id", (req, res) => {
-  const info = db.prepare("DELETE FROM students WHERE id = ?").run(req.params.id);
-  if (info.changes === 0) return res.status(404).json({ error: "Student not found" });
-  res.json({ message: "Student deleted" });
+router.delete("/:id", async (req, res) => {
+  try {
+    const [result] = await pool.query("DELETE FROM students WHERE id = ?", [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Student not found" });
+    res.json({ message: "Student deleted" });
+  } catch (e) {
+    handleError(e, res, "Could not delete student");
+  }
 });
 
 module.exports = router;
