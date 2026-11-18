@@ -59,3 +59,8 @@ tr:last-child td { border-bottom: none; }
 @media (max-width: 560px) {
   .form { grid-template-columns: 1fr; }
 }
+
+.file-field { grid-column: 1 / -1; }
+.hint { font-size: .8125rem; color: var(--muted); }
+button:disabled { opacity: .6; cursor: not-allowed; }
+td a { color: var(--accent); word-break: break-all; }

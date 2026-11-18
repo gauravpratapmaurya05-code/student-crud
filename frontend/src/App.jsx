@@ -6,8 +6,12 @@ const emptyForm = { name: "", age: "", roll_no: "" };
 export default function App() {
   const [students, setStudents] = useState([]);
   const [form, setForm] = useState(emptyForm);
+  const [file, setFile] = useState(null);
+  const [fileInputKey, setFileInputKey] = useState(0); // changing this clears the file input
   const [editingId, setEditingId] = useState(null);
+  const [currentFileName, setCurrentFileName] = useState("");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     try {
@@ -23,29 +27,41 @@ export default function App() {
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const resetForm = () => {
+    setForm(emptyForm);
+    setFile(null);
+    setFileInputKey((k) => k + 1);
+    setEditingId(null);
+    setCurrentFileName("");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSaving(true);
     try {
-      if (editingId) await updateStudent(editingId, form);
-      else await addStudent(form);
-      setForm(emptyForm);
-      setEditingId(null);
+      if (editingId) await updateStudent(editingId, { ...form, file });
+      else await addStudent({ ...form, file });
+      resetForm();
       load();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleEdit = (s) => {
     setEditingId(s.id);
     setForm({ name: s.name, age: s.age, roll_no: s.roll_no });
+    setFile(null);
+    setFileInputKey((k) => k + 1);
+    setCurrentFileName(s.file_name || "");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleCancel = () => {
-    setEditingId(null);
-    setForm(emptyForm);
+    resetForm();
     setError("");
   };
 
@@ -76,9 +92,21 @@ export default function App() {
           Roll no.
           <input name="roll_no" value={form.roll_no} onChange={handleChange} placeholder="CS-101" />
         </label>
+        <label className="file-field">
+          File (PNG, JPG, GIF, PDF or DOCX, max 5 MB)
+          <input
+            key={fileInputKey}
+            type="file"
+            accept=".png,.jpg,.jpeg,.gif,.pdf,.docx"
+            onChange={(e) => setFile(e.target.files[0] || null)}
+          />
+          {editingId && currentFileName && (
+            <span className="hint">Current file: {currentFileName}. Choose a new one to replace it.</span>
+          )}
+        </label>
         <div className="actions">
-          <button type="submit" className="primary">
-            {editingId ? "Save changes" : "Add student"}
+          <button type="submit" className="primary" disabled={saving}>
+            {saving ? "Saving..." : editingId ? "Save changes" : "Add student"}
           </button>
           {editingId && (
             <button type="button" onClick={handleCancel}>
@@ -100,6 +128,7 @@ export default function App() {
                 <th>Roll no.</th>
                 <th>Name</th>
                 <th>Age</th>
+                <th>File</th>
                 <th></th>
               </tr>
             </thead>
@@ -109,6 +138,15 @@ export default function App() {
                   <td>{s.roll_no}</td>
                   <td>{s.name}</td>
                   <td>{s.age}</td>
+                  <td>
+                    {s.file_url ? (
+                      <a href={s.file_url} target="_blank" rel="noreferrer">
+                        {s.file_name}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className="row-actions">
                     <button onClick={() => handleEdit(s)}>Edit</button>
                     <button className="danger" onClick={() => handleDelete(s.id)}>Delete</button>
